@@ -1,0 +1,58 @@
+name: Build 32-bit Windows EXE
+
+on:
+  workflow_dispatch:      # Actions 页面手动点运行
+  push:
+    tags: [ 'v*' ]        # 推送 v1.0.0 之类 tag 自动触发
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 32 位 Python 只能装 3.8.10（最后一个提供 32 位安装器的版本）
+      - name: Download Python 3.8.10 (32-bit)
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "https://www.python.org/ftp/python/3.8.10/python-3.8.10.exe" `
+            -OutFile "python-3.8.10.exe"
+
+      - name: Install Python 3.8.10 (32-bit)
+        shell: pwsh
+        run: |
+          Start-Process -FilePath ".\python-3.8.10.exe" `
+            -ArgumentList "/quiet InstallAllUsers=1 TargetDir=C:\Python38-32 PrependPath=1 Include_test=0" `
+            -Wait
+          C:\Python38-32\python.exe --version
+
+      # 脚本只需要 selenium；锁 3.141.0 是因为代码用的是旧 API（find_element_by_xpath）
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          C:\Python38-32\python.exe -m pip install --upgrade pip
+          C:\Python38-32\python.exe -m pip install pyinstaller "selenium==3.141.0"
+
+      # 注意：没加 -w ！脚本里有 input()，必须保留控制台窗口
+      - name: Build EXE
+        shell: pwsh
+        run: |
+          C:\Python38-32\python.exe -m PyInstaller -F --clean firefoxclick2601027.py
+
+      - name: Verify EXE is 32-bit
+        shell: pwsh
+        run: |
+          $bytes = [System.IO.File]::ReadAllBytes("dist\firefoxclick2601027.exe")
+          $peOffset = [BitConverter]::ToInt32($bytes, 0x3C)
+          $machine  = [BitConverter]::ToUInt16($bytes, $peOffset + 4)
+          if ($machine -eq 0x014c) { Write-Host "OK: 32-bit (I386)" }
+          else { Write-Host ("FAIL: Machine = 0x{0:X4}, not 32-bit!" -f $machine); exit 1 }
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: firefoxclick-32bit
+          path: dist/*.exe
+          retention-days: 30
