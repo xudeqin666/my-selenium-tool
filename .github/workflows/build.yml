@@ -33,7 +33,7 @@ jobs:
         shell: pwsh
         run: |
           C:\Python38-32\python.exe -m pip install --upgrade pip
-          C:\Python38-32\python.exe -m pip install pyinstaller "selenium==3.141.0"
+          C:\Python38-32\python.exe -m pip install pyinstaller "selenium==3.11.0"
 
       # 注意：没加 -w ！脚本里有 input()，必须保留控制台窗口
       - name: Build EXE
